@@ -9,13 +9,13 @@ package org.cef.callback;
  * requests.
  */
 public interface CefAuthCallback {
-	/**
-	 * Cancel the authentication request.
-	 */
-	public void cancel();
+    /**
+     * Continue the authentication request.
+     */
+    public void Continue(String username, String password);
 
-	/**
-	 * Continue the authentication request.
-	 */
-	public void Continue(String username, String password);
+    /**
+     * Cancel the authentication request.
+     */
+    public void cancel();
 }

@@ -4,65 +4,62 @@
 
 package org.cef.handler;
 
+import org.cef.CefSettings;
 import org.cef.browser.CefBrowser;
+import org.cef.browser.CefFrame;
 
 /**
  * Implement this interface to handle events related to browser display state.
  * The methods of this class will be called on the UI thread.
  */
 public interface CefDisplayHandler {
+    /**
+     * Browser address changed.
+     * @param browser The browser generating the event.
+     * @param frame The frame generating the event.
+     * @param url The new address.
+     */
+    public void onAddressChange(CefBrowser browser, CefFrame frame, String url);
 
-	/**
-	 * Handle address changes.
-	 *
-	 * @param browser
-	 *            The browser generating the event.
-	 * @param url
-	 *            The new address.
-	 */
-	public void onAddressChange(CefBrowser browser, String url);
+    /**
+     * Browser title changed.
+     * @param browser The browser generating the event.
+     * @param title The new title.
+     */
+    public void onTitleChange(CefBrowser browser, String title);
 
-	/**
-	 * Called to display a console message.
-	 *
-	 * @param browser
-	 *            The browser generating the event.
-	 * @param message
-	 * @param source
-	 * @param line
-	 * @return true to stop the message from being output to the console.
-	 */
-	public boolean onConsoleMessage(CefBrowser browser, String message, String source, int line);
+    /**
+     * About to display a tooltip.
+     * @param browser The browser generating the event.
+     * @param text Contains the text that will be displayed in the tooltip.
+     * @return true to handle the tooltip display yourself.
+     */
+    public boolean onTooltip(CefBrowser browser, String text);
 
-	/**
-	 * Called when the browser receives a status message.
-	 *
-	 * @param browser
-	 *            The browser generating the event.
-	 * @param value
-	 *            Contains the text that will be displayed in the status
-	 *            message.
-	 */
-	public void onStatusMessage(CefBrowser browser, String value);
+    /**
+     * Received a status message.
+     * @param browser The browser generating the event.
+     * @param value Contains the text that will be displayed in the status message.
+     */
+    public void onStatusMessage(CefBrowser browser, String value);
 
-	/**
-	 * Handle title changes.
-	 *
-	 * @param browser
-	 *            The browser generating the event.
-	 * @param title
-	 *            The new title.
-	 */
-	public void onTitleChange(CefBrowser browser, String title);
+    /**
+     * Display a console message.
+     * @param browser The browser generating the event.
+     * @param level
+     * @param message
+     * @param source
+     * @param line
+     * @return true to stop the message from being output to the console.
+     */
+    public boolean onConsoleMessage(CefBrowser browser, CefSettings.LogSeverity level,
+            String message, String source, int line);
 
-	/**
-	 * Called when the browser is about to display a tooltip.
-	 *
-	 * @param browser
-	 *            The browser generating the event.
-	 * @param text
-	 *            Contains the text that will be displayed in the tooltip.
-	 * @return To handle the display of the tooltip yourself return true.
-	 */
-	public boolean onTooltip(CefBrowser browser, String text);
+    /**
+     * Handle cursor changes.
+     * @param browser The browser generating the event.
+     * @param cursorType The new cursor type.
+     * @return true if the cursor change was handled.
+     */
+    public boolean onCursorChange(CefBrowser browser, int cursorType);
 }

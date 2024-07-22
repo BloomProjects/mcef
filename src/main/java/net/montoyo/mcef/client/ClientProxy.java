@@ -1,204 +1,386 @@
 package net.montoyo.mcef.client;
 
-import java.io.File;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-
-import org.cef.CefApp;
-import org.cef.CefClient;
-import org.cef.CefSettings;
-import org.cef.browser.CefBrowserOsr;
-import org.cef.browser.CefMessageRouter;
-import org.cef.browser.CefMessageRouter.CefMessageRouterConfig;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
-import net.minecraftforge.fml.common.FMLCommonHandler;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import net.minecraftforge.fml.relauncher.Side;
 import net.montoyo.mcef.BaseProxy;
 import net.montoyo.mcef.MCEF;
 import net.montoyo.mcef.api.IBrowser;
 import net.montoyo.mcef.api.IDisplayHandler;
 import net.montoyo.mcef.api.IJSQueryHandler;
+import net.montoyo.mcef.api.IScheme;
+import net.montoyo.mcef.coremod.ShutdownPatcher;
 import net.montoyo.mcef.example.ExampleMod;
 import net.montoyo.mcef.remote.RemoteConfig;
+import net.montoyo.mcef.utilities.ForgeProgressListener;
+import net.montoyo.mcef.utilities.IProgressListener;
 import net.montoyo.mcef.utilities.Log;
+import net.montoyo.mcef.utilities.Util;
 import net.montoyo.mcef.virtual.VirtualBrowser;
+import org.cef.CefApp;
+import org.cef.CefClient;
+import org.cef.CefSettings;
+import org.cef.OS;
+import org.cef.browser.CefBrowser;
+import org.cef.browser.CefBrowserOsr;
+import org.cef.browser.CefMessageRouter;
+import org.cef.browser.CefMessageRouter.CefMessageRouterConfig;
+import org.cef.browser.CefRenderer;
+import org.cef.handler.CefLifeSpanHandlerAdapter;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ClientProxy extends BaseProxy {
 
-	public static String ROOT = ".";
-	public static boolean VIRTUAL = false;
+    public static String ROOT = ".";
+    public static String JCEF_ROOT = ".";
+    public static boolean VIRTUAL = false;
 
-	private CefApp cefApp;
-	private CefClient cefClient;
-	private CefMessageRouter cefRouter;
-	private boolean firstRouter = true;
-	private ArrayList<CefBrowserOsr> browsers = new ArrayList<CefBrowserOsr>();
-	private String updateStr;
-	private Minecraft mc = Minecraft.getMinecraft();
+    private CefApp cefApp;
+    private CefClient cefClient;
+    private CefMessageRouter cefRouter;
+    private final ArrayList<CefBrowserOsr> browsers = new ArrayList<>();
+    private String updateStr;
+    private final Minecraft mc = Minecraft.getMinecraft();
+    private final DisplayHandler displayHandler = new DisplayHandler();
+    private final HashMap<String, String> mimeTypeMap = new HashMap<>();
+    private final AppHandler appHandler = new AppHandler();
+    private ExampleMod exampleMod;
 
-	@Override
-	public IBrowser createBrowser(String url, boolean transp) {
-		if (VIRTUAL) {
-			return new VirtualBrowser();
-		}
+    @Override
+    public void onPreInit() {
+        exampleMod = new ExampleMod();
+        exampleMod.onPreInit(); //Do it even if example mod is disabled because it registers the "mod://" scheme
+    }
 
-		CefBrowserOsr ret = (CefBrowserOsr) cefClient.createBrowser(url, true, transp);
-		browsers.add(ret);
-		return ret;
-	}
+    @Override
+    public void onInit() {
+        appHandler.setArgs(MCEF.CEF_ARGS);
 
-	public CefApp getCefApp() {
-		return cefApp;
-	}
+        ROOT = mc.mcDataDir.getAbsolutePath().replaceAll("\\\\", "/");
+        if (ROOT.endsWith("."))
+            ROOT = ROOT.substring(0, ROOT.length() - 1);
 
-	@Override
-	public boolean isVirtual() {
-		return VIRTUAL;
-	}
+        if (ROOT.endsWith("/"))
+            ROOT = ROOT.substring(0, ROOT.length() - 1);
 
-	@Override
-	public void onInit() {
-		File f = new File(mc.mcDataDir.getParentFile(), "mcef");
-		f.mkdirs();
-		ROOT = f.getAbsolutePath().replaceAll("\\\\", "/");
+        JCEF_ROOT = ROOT + "/jcef";
 
-		UpdateFrame uf = new UpdateFrame();
-		RemoteConfig cfg = new RemoteConfig();
+        File fileListing = new File(new File(ROOT), "config");
 
-		cfg.load();
-		if (!cfg.downloadMissing(uf)) {
-			Log.warning("Going in virtual mode; couldn't download resources.");
-			VIRTUAL = true;
-			return;
-		}
+        RemoteConfig cfg = new RemoteConfig();
+        IProgressListener ipl = new UpdateFrame();
 
-		updateStr = cfg.getUpdateString();
-		uf.dispose();
+        cfg.load();
 
-		if (VIRTUAL) {
-			return;
-		}
+        if (!cfg.updateFileListing(fileListing, false))
+            Log.warning("There was a problem while establishing file list. Uninstall may not delete all files.");
 
-		Log.info("Now adding \"%s\" to java.library.path", ROOT);
+        if (!cfg.downloadMissing(ipl)) {
+            Log.warning("Going in virtual mode; couldn't download resources.");
+            VIRTUAL = true;
+            return;
+        }
 
-		try {
-			Field pathsField = ClassLoader.class.getDeclaredField("usr_paths");
-			pathsField.setAccessible(true);
+        if (!cfg.updateFileListing(fileListing, true))
+            Log.warning("There was a problem while updating file list. Uninstall may not delete all files.");
 
-			String[] paths = (String[]) pathsField.get(null);
-			String[] newList = new String[paths.length + 1];
+        updateStr = cfg.getUpdateString();
+        ipl.onProgressEnd();
 
-			System.arraycopy(paths, 0, newList, 0, paths.length);
-			newList[paths.length] = ROOT.replace('/', File.separatorChar);
-			pathsField.set(null, newList);
-		} catch (Exception e) {
-			Log.error("Failed to do it! Entering virtual mode...");
-			e.printStackTrace();
+        if (VIRTUAL)
+            return;
+        
+        Log.info("Now adding \"%s\" to java.library.path", ROOT);
+        
+        try {
+            Field pathsField = ClassLoader.class.getDeclaredField("usr_paths");
+            pathsField.setAccessible(true);
+            
+            String[] paths = (String[]) pathsField.get(null);
+            String[] newList = new String[paths.length + 1];
+            
+            System.arraycopy(paths, 0, newList, 1, paths.length);
+            newList[0] = ROOT.replace('/', File.separatorChar);
+            pathsField.set(null, newList);
+        } catch(Exception e) {
+            Log.error("Failed to do it! Entering virtual mode...");
+            e.printStackTrace();
+            
+            VIRTUAL = true;
+            return;
+        }
 
-			VIRTUAL = true;
-			return;
-		}
+        if (OS.isLinux()) {
+            File subproc = new File(JCEF_ROOT, "jcef_helper");
 
-		Log.info("Done without errors.");
+            // Attempt to make the CEF subprocess executable if not
+            if (!subproc.canExecute()) {
+                try {
+                    int retCode = Runtime.getRuntime().exec(new String[]{"/usr/bin/chmod", "+x", subproc.getAbsolutePath()}).waitFor();
 
-		CefSettings settings = new CefSettings();
-		settings.windowless_rendering_enabled = true;
-		settings.background_color = settings.new ColorType(0, 255, 255, 255);
-		settings.locales_dir_path = (new File(ROOT, "locales")).getAbsolutePath();
-		settings.cache_path = (new File(ROOT, "MCEFCache")).getAbsolutePath();
-		// settings.log_severity = CefSettings.LogSeverity.LOGSEVERITY_VERBOSE;
+                    if (retCode != 0)
+                        throw new RuntimeException("chmod exited with code " + retCode);
+                } catch (Throwable t) {
+                    Log.errorEx("Error while giving execution rights to jcef_helper. MCEF will enter virtual mode. You can fix this by chmoding jcef_helper manually.", t);
+                    VIRTUAL = true;
+                }
+            }
+        }
 
-		try {
-			cefApp = CefApp.getInstance(settings);
-			cefApp.myLoc = ROOT.replace('/', File.separatorChar);
+        CefSettings settings = new CefSettings();
+        settings.windowless_rendering_enabled = true;
+        settings.background_color = settings.new ColorType(0, 255, 255, 255);
+        settings.cache_path = (new File(JCEF_ROOT, "cache")).getAbsolutePath();
 
-			CefApp.addAppHandler(new AppHandler());
-			cefClient = cefApp.createClient();
-		} catch (Throwable t) {
-			Log.error("Going in virtual mode; couldn't initialize CEF.");
-			t.printStackTrace();
+        CefApp.startup(MCEF.CEF_ARGS);
+        cefApp = CefApp.getInstance(settings);
 
-			VIRTUAL = true;
-			return;
-		}
+        // Custom scheme broken on Linux, for now
+        if (!OS.isLinux()) {
+            CefApp.addAppHandler(appHandler);
+        }
 
-		Log.info(cefApp.getVersion().toString());
-		cefRouter = CefMessageRouter.create(new CefMessageRouterConfig("mcefQuery", "mcefCancel"));
-		cefClient.addMessageRouter(cefRouter);
+        loadMimeTypeMapping();
 
-		(new ShutdownThread(browsers)).start();
-		FMLCommonHandler.instance().bus().register(this);
+        cefClient = cefApp.createClient();
 
-		if (MCEF.ENABLE_EXAMPLE) {
-			(new ExampleMod()).onInit();
-		}
+        Log.info(cefApp.getVersion().toString());
+        cefRouter = CefMessageRouter.create(new CefMessageRouterConfig("mcefQuery", "mcefCancel"));
+        cefClient.addMessageRouter(cefRouter);
+        cefClient.addDisplayHandler(displayHandler);
+        cefClient.addLifeSpanHandler(new CefLifeSpanHandlerAdapter() {
+            @Override
+            public boolean doClose(CefBrowser browser) {
+                browser.close(true);
+                return false;
+            }
+        });
 
-		Log.info("MCEF loaded successfuly.");
-	}
+        if (!ShutdownPatcher.didPatchSucceed()) {
+            Log.warning("ShutdownPatcher failed to patch Minecraft.run() method; starting ShutdownThread...");
+            (new ShutdownThread()).start();
+        }
 
-	@SubscribeEvent
-	public void onLogin(PlayerEvent.PlayerLoggedInEvent ev) {
-		if ((updateStr == null) || !MCEF.WARN_UPDATES) {
-			return;
-		}
+        MinecraftForge.EVENT_BUS.register(this);
+        if (MCEF.ENABLE_EXAMPLE)
+            exampleMod.onInit();
 
-		ChatStyle cs = new ChatStyle();
-		cs.setColor(EnumChatFormatting.LIGHT_PURPLE);
+        Log.info("MCEF loaded successfuly.");
+    }
 
-		ChatComponentText cct = new ChatComponentText(updateStr);
-		cct.setChatStyle(cs);
+    public CefApp getCefApp() {
+        return cefApp;
+    }
 
-		ev.player.addChatComponentMessage(cct);
-	}
+    @Override
+    public IBrowser createBrowser(String url, boolean transp) {
+        if (VIRTUAL)
+            return new VirtualBrowser();
 
-	@SubscribeEvent
-	public void onTick(TickEvent.RenderTickEvent ev) {
-		if((ev.phase == TickEvent.Phase.START)){
-			mc.mcProfiler.startSection("MCEF");
+        CefBrowserOsr ret = (CefBrowserOsr) cefClient.createBrowser(url, true, transp);
+        ret.setCloseAllowed();
+        ret.createImmediately();
 
-			for (CefBrowserOsr b : browsers) {
-				b.mcefUpdate();
-			}
+        browsers.add(ret);
+        return ret;
+    }
 
-			mc.mcProfiler.endSection();
-		}
-	}
+    @Override
+    public void registerDisplayHandler(IDisplayHandler idh) {
+        displayHandler.addHandler(idh);
+    }
 
-	@Override
-	public void openExampleBrowser(String url) {
-		if (MCEF.ENABLE_EXAMPLE) {
-			ExampleMod.INSTANCE.showScreen(url);
-		}
-	}
+    @Override
+    public boolean isVirtual() {
+        return VIRTUAL;
+    }
 
-	@Override
-	public void registerDisplayHandler(IDisplayHandler idh) {
-		if (!VIRTUAL) {
-			cefClient.addDisplayHandler(new DisplayHandler(idh));
-		}
-	}
+    @Override
+    public void openExampleBrowser(String url) {
+        if (MCEF.ENABLE_EXAMPLE)
+            exampleMod.showScreen(url);
+    }
 
-	@Override
-	public void registerJSQueryHandler(IJSQueryHandler iqh) {
-		if (!VIRTUAL) {
-			cefRouter.addHandler(new MessageRouter(iqh), firstRouter); // SwingUtilities.invokeLater()
-																		// ?
-		}
+    @Override
+    public void registerJSQueryHandler(IJSQueryHandler iqh) {
+        if (!VIRTUAL)
+            cefRouter.addHandler(new MessageRouter(iqh), false);
+    }
 
-		if (firstRouter) {
-			firstRouter = false;
-		}
-	}
+    @Override
+    public void registerScheme(String name, Class<? extends IScheme> schemeClass, boolean std, boolean local, boolean displayIsolated, boolean secure, boolean corsEnabled, boolean cspBypassing, boolean fetchEnabled) {
+        appHandler.registerScheme(name, schemeClass, std, local, displayIsolated, secure, corsEnabled, cspBypassing, fetchEnabled);
+    }
 
-	public void removeBrowser(CefBrowserOsr b) {
-		browsers.remove(b);
-	}
+    @Override
+    public boolean isSchemeRegistered(String name) {
+        return appHandler.isSchemeRegistered(name);
+    }
 
+    @SubscribeEvent
+    public void onTick(TickEvent.RenderTickEvent ev) {
+        if (ev.phase == TickEvent.Phase.START) {
+            mc.mcProfiler.startSection("MCEF");
+
+            if (cefApp != null)
+                cefApp.N_DoMessageLoopWork();
+
+            for (CefBrowserOsr b : browsers)
+                b.mcefUpdate();
+
+            displayHandler.update();
+            mc.mcProfiler.endSection();
+        }
+    }
+
+    @SubscribeEvent
+    public void onLogin(PlayerEvent.PlayerLoggedInEvent ev) {
+        if (updateStr == null || !MCEF.WARN_UPDATES)
+            return;
+
+        ChatStyle cs = new ChatStyle();
+        cs.setColor(EnumChatFormatting.LIGHT_PURPLE);
+
+        ChatComponentText cct = new ChatComponentText(updateStr);
+        cct.setChatStyle(cs);
+
+        ev.player.addChatComponentMessage(cct);
+    }
+
+    public void removeBrowser(CefBrowserOsr b) {
+        browsers.remove(b);
+    }
+
+    @Override
+    public IBrowser createBrowser(String url) {
+        return createBrowser(url, false);
+    }
+
+    private void runMessageLoopFor(long ms) {
+        final long start = System.currentTimeMillis();
+
+        do {
+            cefApp.N_DoMessageLoopWork();
+        } while (System.currentTimeMillis() - start < ms);
+    }
+
+    @Override
+    public void onShutdown() {
+        if (VIRTUAL)
+            return;
+
+        Log.info("Shutting down JCEF...");
+        CefBrowserOsr.CLEANUP = false; //Workaround
+
+        for (CefBrowserOsr b : browsers)
+            b.close();
+
+        browsers.clear();
+
+        if (MCEF.CHECK_VRAM_LEAK)
+            CefRenderer.dumpVRAMLeak();
+
+        runMessageLoopFor(100);
+        CefApp.forceShutdownState();
+        cefClient.dispose();
+
+        if (MCEF.SHUTDOWN_JCEF)
+            cefApp.N_Shutdown();
+    }
+
+    public void loadMimeTypeMapping() {
+        Pattern p = Pattern.compile("^(\\S+)\\s+(\\S+)\\s*(\\S*)\\s*(\\S*)$");
+        String line = "";
+        int cLine = 0;
+        mimeTypeMap.clear();
+
+        try {
+            BufferedReader br = new BufferedReader(new InputStreamReader(ClientProxy.class.getResourceAsStream("/assets/mcef/mime.types")));
+
+            while (true) {
+                cLine++;
+                line = br.readLine();
+                if (line == null)
+                    break;
+
+                line = line.trim();
+                if (!line.startsWith("#")) {
+                    Matcher m = p.matcher(line);
+                    if (!m.matches())
+                        continue;
+
+                    mimeTypeMap.put(m.group(2), m.group(1));
+                    if (m.groupCount() >= 4 && !m.group(3).isEmpty()) {
+                        mimeTypeMap.put(m.group(3), m.group(1));
+
+                        if (m.groupCount() >= 5 && !m.group(4).isEmpty())
+                            mimeTypeMap.put(m.group(4), m.group(1));
+                    }
+                }
+            }
+
+            Util.close(br);
+        } catch (Throwable e) {
+            Log.error("[Mime Types] Error while parsing \"%s\" at line %d:", line, cLine);
+            e.printStackTrace();
+        }
+
+        Log.info("Loaded %d mime types", mimeTypeMap.size());
+    }
+
+    @Override
+    public String mimeTypeFromExtension(String ext) {
+        ext = ext.toLowerCase();
+        String ret = mimeTypeMap.get(ext);
+        if (ret != null)
+            return ret;
+
+        //If the mimeTypeMap couldn't be loaded, fall back to common things
+        switch (ext) {
+            case "htm":
+            case "html":
+                return "text/html";
+
+            case "css":
+                return "text/css";
+
+            case "js":
+                return "text/javascript";
+
+            case "png":
+                return "image/png";
+
+            case "jpg":
+            case "jpeg":
+                return "image/jpeg";
+
+            case "gif":
+                return "image/gif";
+
+            case "svg":
+                return "image/svg+xml";
+
+            case "xml":
+                return "text/xml";
+
+            case "txt":
+                return "text/plain";
+
+            default:
+                return null;
+        }
+    }
 }

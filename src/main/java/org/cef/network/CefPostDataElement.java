@@ -9,111 +9,119 @@ package org.cef.network;
  * methods of this class may be called on any thread.
  */
 public abstract class CefPostDataElement {
+    /**
+     * Post data elements may represent either bytes or files.
+     */
+    public static enum Type {
+        PDE_TYPE_EMPTY,
+        PDE_TYPE_BYTES,
+        PDE_TYPE_FILE,
+    }
 
-	/**
-	 * Post data elements may represent either bytes or files.
-	 */
-	public static enum Type {
-		PDE_TYPE_EMPTY, PDE_TYPE_BYTES, PDE_TYPE_FILE,
-	}
+    // This CTOR can't be called directly. Call method create() instead.
+    CefPostDataElement() {}
 
-	/**
-	 * Create a new CefPostDataElement object.
-	 */
-	public static final CefPostDataElement create() {
-		return CefPostDataElement_N.createNative();
-	}
+    @Override
+    protected void finalize() throws Throwable {
+        dispose();
+        super.finalize();
+    }
 
-	// This CTOR can't be called directly. Call method create() instead.
-	CefPostDataElement() {
-	}
+    /**
+     * Create a new CefPostDataElement object.
+     */
+    public static final CefPostDataElement create() {
+        return CefPostDataElement_N.createNative();
+    }
 
-	/**
-	 * Read up to size bytes into bytes and return the number of bytes actually
-	 * read.
-	 */
-	public abstract int getBytes(int size, byte[] bytes);
+    /**
+     * Removes the native reference from an unused object.
+     */
+    public abstract void dispose();
 
-	/**
-	 * Return the number of bytes.
-	 */
-	public abstract int getBytesCount();
+    /**
+     * Returns true if this object is read-only.
+     */
+    public abstract boolean isReadOnly();
 
-	/**
-	 * Return the file name.
-	 */
-	public abstract String getFile();
+    /**
+     * Remove all contents from the post data element.
+     */
+    public abstract void setToEmpty();
 
-	/**
-	 * Return the type of this post data element.
-	 */
-	public abstract Type getType();
+    /**
+     * The post data element will represent a file.
+     */
+    public abstract void setToFile(String fileName);
 
-	/**
-	 * Returns true if this object is read-only.
-	 */
-	public abstract boolean isReadOnly();
+    /**
+     * The post data element will represent bytes.  The bytes passed
+     * in will be copied.
+     */
+    public abstract void setToBytes(int size, byte[] bytes);
 
-	/**
-	 * The post data element will represent bytes. The bytes passed in will be
-	 * copied.
-	 */
-	public abstract void setToBytes(int size, byte[] bytes);
+    /**
+     * Return the type of this post data element.
+     */
+    public abstract Type getType();
 
-	/**
-	 * Remove all contents from the post data element.
-	 */
-	public abstract void setToEmpty();
+    /**
+     * Return the file name.
+     */
+    public abstract String getFile();
 
-	/**
-	 * The post data element will represent a file.
-	 */
-	public abstract void setToFile(String fileName);
+    /**
+     * Return the number of bytes.
+     */
+    public abstract int getBytesCount();
 
-	@Override
-	public String toString() {
-		return toString(null);
-	}
+    /**
+     * Read up to size bytes into bytes and return the number of bytes
+     * actually read.
+     */
+    public abstract int getBytes(int size, byte[] bytes);
 
-	public String toString(String mimeType) {
-		int bytesCnt = getBytesCount();
-		byte[] bytes = null;
-		if (bytesCnt > 0) {
-			bytes = new byte[bytesCnt];
-		}
+    @Override
+    public String toString() {
+        return toString(null);
+    }
 
-		boolean asText = false;
-		if (mimeType != null) {
-			if (mimeType.startsWith("text/")) {
-				asText = true;
-			} else if (mimeType.startsWith("application/xml")) {
-				asText = true;
-			} else if (mimeType.startsWith("application/xhtml")) {
-				asText = true;
-			} else if (mimeType.startsWith("application/x-www-form-urlencoded")) {
-				asText = true;
-			}
-		}
+    public String toString(String mimeType) {
+        int bytesCnt = getBytesCount();
+        byte[] bytes = null;
+        if (bytesCnt > 0) {
+            bytes = new byte[bytesCnt];
+        }
 
-		String returnValue = "";
+        boolean asText = false;
+        if (mimeType != null) {
+            if (mimeType.startsWith("text/"))
+                asText = true;
+            else if (mimeType.startsWith("application/xml"))
+                asText = true;
+            else if (mimeType.startsWith("application/xhtml"))
+                asText = true;
+            else if (mimeType.startsWith("application/x-www-form-urlencoded"))
+                asText = true;
+        }
 
-		if (getType() == Type.PDE_TYPE_BYTES) {
-			int setBytes = getBytes(bytes.length, bytes);
-			returnValue += "    Content-Length: " + bytesCnt + "\n";
-			if (asText) {
-				returnValue += "\n    " + new String(bytes);
-			} else {
-				for (int i = 0; i < setBytes; i++) {
-					if ((i % 40) == 0) {
-						returnValue += "\n    ";
-					}
-					returnValue += String.format("%02X", bytes[i]) + " ";
-				}
-			}
-			returnValue += "\n";
-		} else if (getType() == Type.PDE_TYPE_FILE) {
-			returnValue += "\n    Bytes of file: " + getFile() + "\n";
-		}
-		return returnValue;
-	}
+        String returnValue = "";
+
+        if (getType() == Type.PDE_TYPE_BYTES) {
+            int setBytes = getBytes(bytes.length, bytes);
+            returnValue += "    Content-Length: " + bytesCnt + "\n";
+            if (asText) {
+                returnValue += "\n    " + new String(bytes);
+            } else {
+                for (int i = 0; i < setBytes; i++) {
+                    if (i % 40 == 0) returnValue += "\n    ";
+                    returnValue += String.format("%02X", bytes[i]) + " ";
+                }
+            }
+            returnValue += "\n";
+        } else if (getType() == Type.PDE_TYPE_FILE) {
+            returnValue += "\n    Bytes of file: " + getFile() + "\n";
+        }
+        return returnValue;
+    }
 }

@@ -12,168 +12,177 @@ import java.util.Vector;
  * Class representing print settings.
  */
 public abstract class CefPrintSettings {
+    /**
+     * Print job color mode values.
+     */
+    public enum ColorModel {
+        COLOR_MODEL_UNKNOWN,
+        COLOR_MODEL_GRAY,
+        COLOR_MODEL_COLOR,
+        COLOR_MODEL_CMYK,
+        COLOR_MODEL_CMY,
+        COLOR_MODEL_KCMY,
+        COLOR_MODEL_CMY_K, //!< CMY_K represents CMY+K.
+        COLOR_MODEL_BLACK,
+        COLOR_MODEL_GRAYSCALE,
+        COLOR_MODEL_RGB,
+        COLOR_MODEL_RGB16,
+        COLOR_MODEL_RGBA,
+        COLOR_MODEL_COLORMODE_COLOR, //!< Used in samsung printer ppds.
+        COLOR_MODEL_COLORMODE_MONOCHROME, //!< Used in samsung printer ppds.
+        COLOR_MODEL_HP_COLOR_COLOR, //!< Used in HP color printer ppds.
+        COLOR_MODEL_HP_COLOR_BLACK, //!< Used in HP color printer ppds.
+        COLOR_MODEL_PRINTOUTMODE_NORMAL, //!< Used in foomatic ppds.
+        COLOR_MODEL_PRINTOUTMODE_NORMAL_GRAY, //!< Used in foomatic ppds.
+        COLOR_MODEL_PROCESSCOLORMODEL_CMYK, //!< Used in canon printer ppds.
+        COLOR_MODEL_PROCESSCOLORMODEL_GREYSCALE, //!< Used in canon printer ppds.
+        COLOR_MODEL_PROCESSCOLORMODEL_RGB, //!< Used in canon printer ppds
+    }
 
-	/**
-	 * Print job color mode values.
-	 */
-	public enum ColorModel {
-		COLOR_MODEL_UNKNOWN, COLOR_MODEL_GRAY, COLOR_MODEL_COLOR, COLOR_MODEL_CMYK, COLOR_MODEL_CMY, COLOR_MODEL_KCMY, COLOR_MODEL_CMY_K, // !<
-																																			// CMY_K
-																																			// represents
-																																			// CMY+K.
-		COLOR_MODEL_BLACK, COLOR_MODEL_GRAYSCALE, COLOR_MODEL_RGB, COLOR_MODEL_RGB16, COLOR_MODEL_RGBA, COLOR_MODEL_COLORMODE_COLOR, // !<
-																																		// Used
-																																		// in
-																																		// samsung
-																																		// printer
-																																		// ppds.
-		COLOR_MODEL_COLORMODE_MONOCHROME, // !< Used in samsung printer ppds.
-		COLOR_MODEL_HP_COLOR_COLOR, // !< Used in HP color printer ppds.
-		COLOR_MODEL_HP_COLOR_BLACK, // !< Used in HP color printer ppds.
-		COLOR_MODEL_PRINTOUTMODE_NORMAL, // !< Used in foomatic ppds.
-		COLOR_MODEL_PRINTOUTMODE_NORMAL_GRAY, // !< Used in foomatic ppds.
-		COLOR_MODEL_PROCESSCOLORMODEL_CMYK, // !< Used in canon printer ppds.
-		COLOR_MODEL_PROCESSCOLORMODEL_GREYSCALE, // !< Used in canon printer
-													// ppds.
-		COLOR_MODEL_PROCESSCOLORMODEL_RGB, // !< Used in canon printer ppds
-	}
+    /**
+     * Print job duplex mode values.
+     */
+    public enum DuplexMode {
+        DUPLEX_MODE_UNKNOWN,
+        DUPLEX_MODE_SIMPLEX,
+        DUPLEX_MODE_LONG_EDGE,
+        DUPLEX_MODE_SHORT_EDGE,
+    }
 
-	/**
-	 * Print job duplex mode values.
-	 */
-	public enum DuplexMode {
-		DUPLEX_MODE_UNKNOWN, DUPLEX_MODE_SIMPLEX, DUPLEX_MODE_LONG_EDGE, DUPLEX_MODE_SHORT_EDGE,
-	}
+    // This CTOR can't be called directly. Call method create() instead.
+    CefPrintSettings() {}
 
-	/**
-	 * Create a new CefPrintSettings object.
-	 */
-	public static final CefPrintSettings create() {
-		return CefPrintSettings_N.createNative();
-	}
+    @Override
+    protected void finalize() throws Throwable {
+        dispose();
+        super.finalize();
+    }
 
-	// This CTOR can't be called directly. Call method create() instead.
-	CefPrintSettings() {
-	}
+    /**
+     * Create a new CefPrintSettings object.
+     */
+    public static final CefPrintSettings create() {
+        return CefPrintSettings_N.createNative();
+    }
 
-	/**
-	 * Returns a writable copy of this object.
-	 */
-	public abstract CefPrintSettings copy();
+    /**
+     * Removes the native reference from an unused object.
+     */
+    public abstract void dispose();
 
-	/**
-	 * Get the color model.
-	 */
-	public abstract ColorModel getColorModel();
+    /**
+     * Returns true if this object is valid. Do not call any other methods if this
+     * function returns false.
+     */
+    public abstract boolean isValid();
 
-	/**
-	 * Get the number of copies.
-	 */
-	public abstract int getCopies();
+    /**
+     * Returns true if the values of this object are read-only. Some APIs may
+     * expose read-only objects.
+     */
+    public abstract boolean isReadOnly();
 
-	/**
-	 * Get the device name.
-	 */
-	public abstract String getDeviceName();
+    /**
+     * Set the page orientation.
+     */
+    public abstract void setOrientation(boolean landscape);
 
-	/**
-	 * Get the DPI (dots per inch).
-	 */
-	public abstract int getDPI();
+    /**
+     * Returns true if the orientation is landscape.
+     *
+     */
+    public abstract boolean isLandscape();
 
-	/**
-	 * Get the duplex mode.
-	 */
-	public abstract DuplexMode getDuplexMode();
+    /**
+     * Set the printer printable area in device units.
+     * Some platforms already provide flipped area. Set |landscape_needs_flip|
+     * to false on those platforms to avoid double flipping.
+     */
+    public abstract void setPrinterPrintableArea(Dimension physical_size_device_units,
+            Rectangle printable_area_device_units, boolean landscape_needs_flip);
 
-	/**
-	 * Retrieve the page ranges.
-	 */
-	public abstract void getPageRanges(Vector<CefPageRange> ranges);
+    /**
+     * Set the device name.
+     */
+    public abstract void setDeviceName(String name);
 
-	/**
-	 * Returns the number of page ranges that currently exist.
-	 */
-	public abstract int getPageRangesCount();
+    /**
+     * Get the device name.
+     */
+    public abstract String getDeviceName();
 
-	/**
-	 * Returns true if the orientation is landscape.
-	 *
-	 */
-	public abstract boolean isLandscape();
+    /**
+     * Set the DPI (dots per inch).
+     */
+    public abstract void setDPI(int dpi);
 
-	/**
-	 * Returns true if the values of this object are read-only. Some APIs may
-	 * expose read-only objects.
-	 */
-	public abstract boolean isReadOnly();
+    /**
+     * Get the DPI (dots per inch).
+     */
+    public abstract int getDPI();
 
-	/**
-	 * Returns true if only the selection will be printed.
-	 */
-	public abstract boolean isSelectionOnly();
+    /**
+     * Set the page ranges.
+     */
+    public abstract void setPageRanges(Vector<CefPageRange> ranges);
 
-	/**
-	 * Returns true if this object is valid. Do not call any other methods if
-	 * this function returns false.
-	 */
-	public abstract boolean isValid();
+    /**
+     * Returns the number of page ranges that currently exist.
+     */
+    public abstract int getPageRangesCount();
 
-	/**
-	 * Set whether pages will be collated.
-	 */
-	public abstract void setCollate(boolean collate);
+    /**
+     * Retrieve the page ranges.
+     */
+    public abstract void getPageRanges(Vector<CefPageRange> ranges);
 
-	/**
-	 * Set the color model.
-	 */
-	public abstract void setColorModel(ColorModel model);
+    /**
+     * Set whether only the selection will be printed.
+     */
+    public abstract void setSelectionOnly(boolean selection_only);
 
-	/**
-	 * Set the number of copies.
-	 */
-	public abstract void setCopies(int copies);
+    /**
+     * Returns true if only the selection will be printed.
+     */
+    public abstract boolean isSelectionOnly();
 
-	/**
-	 * Set the device name.
-	 */
-	public abstract void setDeviceName(String name);
+    /**
+     * Set whether pages will be collated.
+     */
+    public abstract void setCollate(boolean collate);
 
-	/**
-	 * Set the DPI (dots per inch).
-	 */
-	public abstract void setDPI(int dpi);
+    /**
+     * Returns true if pages will be collated.
+     */
+    public abstract boolean willCollate();
 
-	/**
-	 * Set the duplex mode.
-	 */
-	public abstract void setDuplexMode(DuplexMode mode);
+    /**
+     * Set the color model.
+     */
+    public abstract void setColorModel(ColorModel model);
 
-	/**
-	 * Set the page orientation.
-	 */
-	public abstract void setOrientation(boolean landscape);
+    /**
+     * Get the color model.
+     */
+    public abstract ColorModel getColorModel();
 
-	/**
-	 * Set the page ranges.
-	 */
-	public abstract void setPageRanges(Vector<CefPageRange> ranges);
+    /**
+     * Set the number of copies.
+     */
+    public abstract void setCopies(int copies);
 
-	/**
-	 * Set the printer printable area in device units. Some platforms already
-	 * provide flipped area. Set |landscape_needs_flip| to false on those
-	 * platforms to avoid double flipping.
-	 */
-	public abstract void setPrinterPrintableArea(Dimension physical_size_device_units,
-			Rectangle printable_area_device_units, boolean landscape_needs_flip);
+    /**
+     * Get the number of copies.
+     */
+    public abstract int getCopies();
 
-	/**
-	 * Set whether only the selection will be printed.
-	 */
-	public abstract void setSelectionOnly(boolean selection_only);
+    /**
+     * Set the duplex mode.
+     */
+    public abstract void setDuplexMode(DuplexMode mode);
 
-	/**
-	 * Returns true if pages will be collated.
-	 */
-	public abstract boolean willCollate();
+    /**
+     * Get the duplex mode.
+     */
+    public abstract DuplexMode getDuplexMode();
 }

@@ -4,138 +4,101 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Random;
-
-import net.montoyo.mcef.MCEF;
-import net.montoyo.mcef.utilities.Log;
 
 /**
- * An enumeration of mirror website where JCEF resources (library & packages)
- * can be downloaded. A random mirror is selected at the beginning. If it is
- * marked as broken, another mirror is chosen.
+ * An object representing an HTTP(S) mirror to download the resources from.
  *
  * @author montoyo
- *
+ * @see {@link net.montoyo.mcef.remote.MirrorManager}
  */
-public enum Mirror {
+public final class Mirror {
 
-	MONTOYO("http://montoyo.net/jcef", "montoyo.net");
+    /**
+     * Whether the mirror is HTTPS or not
+     */
+    public static final int FLAG_SECURE = 1;
 
-	private static Mirror current = pickRandom();
+    /**
+     * Whether this mirror has been forced by the user in the MCEF configuration file
+     */
+    public static final int FLAG_FORCED = 4;
 
-	/**
-	 * Gets the current working mirror.
-	 *
-	 * @return The current non-broken mirror, or null if all mirrors are broken.
-	 */
-	public static Mirror getCurrent() {
-		return current;
-	}
+    private final String name;
+    private final String url;
+    private final int flags;
 
-	/**
-	 * Marks the current mirror as broken.
-	 *
-	 * @return a new mirror that isn't broken, or null if there's none.
-	 */
-	public static Mirror markAsBroken() {
-		current.broken = true;
+    /**
+     * Constructs a Mirror from its name, URL, and flags.
+     *
+     * @param name The name of the mirror
+     * @param url The corresponding URL
+     * @param flags Its flags
+     */
+    public Mirror(String name, String url, int flags) {
+        this.name = name;
+        this.url = url;
+        this.flags = flags;
+    }
 
-		Mirror old = current;
-		current = pickWorking();
-		Log.info("Mirror %s marked as broken; using %s", old.url, (current == null) ? "NULL" : current.url);
+    /**
+     * @return The name of the mirror
+     */
+    public String getName() {
+        return name;
+    }
 
-		return current;
-	}
+    /**
+     * @return The URL of the mirror
+     */
+    public String getURL() {
+        return url;
+    }
 
-	private static Mirror pickRandom() {
-		Mirror[] lst = values();
-		int idx = (new Random()).nextInt(lst.length);
+    /**
+     * @return The flags of this mirror
+     */
+    public int getFlags() {
+        return flags;
+    }
 
-		return lst[idx];
-	}
+    /**
+     * @return Whether the secure flag is set
+     * @see #FLAG_SECURE
+     */
+    public boolean isSecure() {
+        return (flags & FLAG_SECURE) != 0;
+    }
 
-	private static Mirror pickWorking() {
-		for (Mirror m : values()) {
-			if (!m.broken) {
-				return m;
-			}
-		}
+    /**
+     * @return Whether this mirror has been forced by the user
+     * @see #FLAG_FORCED
+     */
+    public boolean isForced() {
+        return (flags & FLAG_FORCED) != 0;
+    }
 
-		return null;
-	}
+    /**
+     * @return A string informing the user of which mirror was selected
+     */
+    public String getInformationString() {
+        return isForced() ? ("Mirror location forced by user to: " + url) : ("Selected mirror: " + name);
+    }
 
-	/**
-	 * Marks all mirrors as working (= not broken). If all mirrors were broken,
-	 * it chooses a new random mirror.
-	 *
-	 * @return The current (or new) mirror.
-	 */
-	public static Mirror reset() {
-		for (Mirror m : values()) {
-			m.broken = false;
-		}
+    /**
+     * Opens a connection to the mirror's resource corresponding to the URL.
+     *
+     * @param name The URL of the resource, relative to the root of the mirror website.
+     * @return A connection to this resource, with timeout set up.
+     * @throws MalformedURLException if the mirror's URL is invalid or if name is invalid.
+     * @throws IOException if an I/O exception occurs.
+     */
+    public HttpURLConnection getResource(String name) throws MalformedURLException, IOException {
+        HttpURLConnection ret = (HttpURLConnection) (new URL(url + '/' + name)).openConnection();
+        ret.setConnectTimeout(30000);
+        ret.setReadTimeout(15000);
+        ret.setRequestProperty("User-Agent", "MCEF");
 
-		if (current == null) {
-			current = pickRandom();
-		}
-
-		return current;
-	}
-
-	private final String url;
-
-	private final String name;
-
-	private boolean broken;
-
-	Mirror(String url, String name) {
-		this.url = url;
-		this.name = name;
-		broken = false;
-	}
-
-	/**
-	 * Returns a "thanks" string.
-	 *
-	 * @return The "thanks" string.
-	 */
-	public String getMirrorString() {
-		if (MCEF.FORCE_MIRROR == null) {
-			return "Mirror kindly provided by " + name;
-		} else {
-			return "Mirror location was set to " + MCEF.FORCE_MIRROR;
-		}
-	}
-
-	/**
-	 * Opens a connection to the mirror's resource corresponding to the URL.
-	 *
-	 * @param name
-	 *            The URL of the resource, relative to the root of the mirror
-	 *            website.
-	 * @return A connection to this resource, with timeout set up.
-	 * @throws MalformedURLException
-	 *             if the mirror's URL is invalid or if name is invalid.
-	 * @throws IOException
-	 *             if an I/O exception occurs.
-	 */
-	public HttpURLConnection getResource(String name) throws MalformedURLException, IOException {
-		HttpURLConnection ret = (HttpURLConnection) (new URL(
-				(MCEF.FORCE_MIRROR == null ? url : MCEF.FORCE_MIRROR) + '/' + name)).openConnection();
-		ret.setConnectTimeout(30000);
-		ret.setReadTimeout(15000);
-		ret.setRequestProperty("User-Agent", "MCEF");
-
-		return ret;
-	}
-
-	/**
-	 * Checks if a mirror is broken or not.
-	 *
-	 * @return true if the mirror is broken.
-	 */
-	public boolean isBroken() {
-		return broken;
-	}
+        return ret;
+    }
 
 }
