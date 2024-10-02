@@ -26,6 +26,10 @@ minecraft {
     makeObfSourceJar = false
 }
 
+dependencies {
+    implementation fileTree(dir: 'libs', include: '*.jar')
+}
+
 processResources {
     inputs.property "version", project.version
     inputs.property "mcversion", project.minecraft.version
